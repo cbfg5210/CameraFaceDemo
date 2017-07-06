@@ -79,7 +79,7 @@ public class Camera2Activity extends AppCompatActivity {
         public void onError(@NonNull CameraDevice cameraDevice, int error) {
             cameraDevice.close();
             mCameraDevice = null;
-            finish();
+//            finish();
         }
     };
 
@@ -87,6 +87,9 @@ public class Camera2Activity extends AppCompatActivity {
             = new CameraCaptureSession.CaptureCallback() {
 
         private void process(CaptureResult result) {
+            if (isFinishing()) {
+                return;
+            }
             Integer mode = result.get(CaptureResult.STATISTICS_FACE_DETECT_MODE);
             Face[] faces = result.get(CaptureResult.STATISTICS_FACES);
             if (faces != null && mode != null) {
@@ -129,9 +132,9 @@ public class Camera2Activity extends AppCompatActivity {
     }
 
     @Override
-    public void onPause() {
+    protected void onDestroy() {
         closeCamera();
-        super.onPause();
+        super.onDestroy();
     }
 
     /**
@@ -236,7 +239,6 @@ public class Camera2Activity extends AppCompatActivity {
                             if (null == mCameraDevice) {
                                 return;
                             }
-
                             // When the session is ready, we start displaying the preview.
                             mCaptureSession = cameraCaptureSession;
                             try {
