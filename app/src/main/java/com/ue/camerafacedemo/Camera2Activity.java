@@ -19,7 +19,6 @@ package com.ue.camerafacedemo;
 import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageManager;
-import android.content.res.Configuration;
 import android.graphics.ImageFormat;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraAccessException;
@@ -43,17 +42,16 @@ import android.text.TextUtils;
 import android.util.Log;
 import android.util.Size;
 import android.view.Surface;
+import android.view.TextureView;
 import android.view.View;
 
 import java.util.Arrays;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
 
 public class Camera2Activity extends AppCompatActivity {
     private static final String TAG = "Camera2Activity";
 
     private String mCameraId;
-    private AutoFitTextureView mTextureView;
+    private TextureView mTextureView;
     private CameraCaptureSession mCaptureSession;
     private CameraDevice mCameraDevice;
     private Size mPreviewSize;
@@ -61,28 +59,25 @@ public class Camera2Activity extends AppCompatActivity {
     private ImageReader mImageReader;
     private CaptureRequest.Builder mPreviewRequestBuilder;
     private CaptureRequest mPreviewRequest;
-    private Semaphore mCameraOpenCloseLock = new Semaphore(1);
 
     private final CameraDevice.StateCallback mStateCallback = new CameraDevice.StateCallback() {
 
         @Override
         public void onOpened(@NonNull CameraDevice cameraDevice) {
             // This method is called when the camera is opened.  We start camera preview here.
-            mCameraOpenCloseLock.release();
+//            mCameraOpenCloseLock.release();
             mCameraDevice = cameraDevice;
             createCameraPreviewSession();
         }
 
         @Override
         public void onDisconnected(@NonNull CameraDevice cameraDevice) {
-            mCameraOpenCloseLock.release();
             cameraDevice.close();
             mCameraDevice = null;
         }
 
         @Override
         public void onError(@NonNull CameraDevice cameraDevice, int error) {
-            mCameraOpenCloseLock.release();
             cameraDevice.close();
             mCameraDevice = null;
             finish();
@@ -120,7 +115,10 @@ public class Camera2Activity extends AppCompatActivity {
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.fragment_camera2_basic);
-        mTextureView = (AutoFitTextureView) findViewById(R.id.texture);
+        mTextureView = (TextureView) findViewById(R.id.texture);
+//        mTextureView.setVisibility(View.INVISIBLE);
+//        mTextureView = new TextureView(this);
+
         findViewById(R.id.btn_open_camera).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -169,15 +167,6 @@ public class Camera2Activity extends AppCompatActivity {
             mImageReader = ImageReader.newInstance(mPreviewSize.getWidth(), mPreviewSize.getHeight(),
                     ImageFormat.JPEG, 2);
 
-            // We fit the aspect ratio of TextureView to the size of preview we picked.
-            int orientation = getResources().getConfiguration().orientation;
-            if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
-                mTextureView.setAspectRatio(
-                        mPreviewSize.getWidth(), mPreviewSize.getHeight());
-            } else {
-                mTextureView.setAspectRatio(
-                        mPreviewSize.getHeight(), mPreviewSize.getWidth());
-            }
         } catch (CameraAccessException e) {
             e.printStackTrace();
         } catch (NullPointerException e) {
@@ -197,14 +186,9 @@ public class Camera2Activity extends AppCompatActivity {
         setUpCameraOutputs();
         CameraManager manager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
         try {
-            if (!mCameraOpenCloseLock.tryAcquire(2500, TimeUnit.MILLISECONDS)) {
-                throw new RuntimeException("Time out waiting to lock camera opening.");
-            }
             manager.openCamera(mCameraId, mStateCallback, null);
         } catch (CameraAccessException e) {
             e.printStackTrace();
-        } catch (InterruptedException e) {
-            throw new RuntimeException("Interrupted while trying to lock camera opening.", e);
         }
     }
 
@@ -212,24 +196,17 @@ public class Camera2Activity extends AppCompatActivity {
      * Closes the current {@link CameraDevice}.
      */
     private void closeCamera() {
-        try {
-            mCameraOpenCloseLock.acquire();
-            if (null != mCaptureSession) {
-                mCaptureSession.close();
-                mCaptureSession = null;
-            }
-            if (null != mCameraDevice) {
-                mCameraDevice.close();
-                mCameraDevice = null;
-            }
-            if (null != mImageReader) {
-                mImageReader.close();
-                mImageReader = null;
-            }
-        } catch (InterruptedException e) {
-            throw new RuntimeException("Interrupted while trying to lock camera closing.", e);
-        } finally {
-            mCameraOpenCloseLock.release();
+        if (null != mCaptureSession) {
+            mCaptureSession.close();
+            mCaptureSession = null;
+        }
+        if (null != mCameraDevice) {
+            mCameraDevice.close();
+            mCameraDevice = null;
+        }
+        if (null != mImageReader) {
+            mImageReader.close();
+            mImageReader = null;
         }
     }
 
@@ -268,8 +245,6 @@ public class Camera2Activity extends AppCompatActivity {
                                 // Auto focus should be continuous for camera preview.
                                 mPreviewRequestBuilder.set(CaptureRequest.STATISTICS_FACE_DETECT_MODE,
                                         CameraMetadata.STATISTICS_FACE_DETECT_MODE_FULL);
-                                // Flash is automatically enabled when necessary.
-
                                 // Finally, we start displaying the camera preview.
                                 mPreviewRequest = mPreviewRequestBuilder.build();
                                 mCaptureSession.setRepeatingRequest(mPreviewRequest,
