@@ -65,7 +65,6 @@ public class Camera2Activity extends AppCompatActivity {
         @Override
         public void onOpened(@NonNull CameraDevice cameraDevice) {
             // This method is called when the camera is opened.  We start camera preview here.
-//            mCameraOpenCloseLock.release();
             mCameraDevice = cameraDevice;
             createCameraPreviewSession();
         }
@@ -162,7 +161,6 @@ public class Camera2Activity extends AppCompatActivity {
             if (map == null) {
                 return;
             }
-
             mPreviewSize = map.getOutputSizes(ImageFormat.JPEG)[0];
             mImageReader = ImageReader.newInstance(mPreviewSize.getWidth(), mPreviewSize.getHeight(),
                     ImageFormat.JPEG, 2);
