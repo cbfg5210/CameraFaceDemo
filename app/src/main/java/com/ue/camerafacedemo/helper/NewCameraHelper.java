@@ -194,7 +194,7 @@ public class NewCameraHelper implements ICameraHelper {
             }
             CameraCharacteristics characteristics = manager.getCameraCharacteristics(mCameraId);
             StreamConfigurationMap map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
-            if (map == null) {git
+            if (map == null) {
                 Log.e(TAG, "map=null");
                 return;
             }
