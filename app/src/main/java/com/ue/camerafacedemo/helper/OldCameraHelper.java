@@ -1,50 +1,56 @@
-package com.ue.camerafacedemo;
+package com.ue.camerafacedemo.helper;
 
 import android.app.Activity;
 import android.hardware.Camera;
+import android.util.Log;
+import android.view.TextureView;
 
 /**
- * Created by hawk on 2017/7/9.
+ * Created by hujiang on 2017/7/7.
  */
 
 public class OldCameraHelper implements ICameraHelper {
     private static final String TAG = OldCameraHelper.class.getSimpleName();
     private Activity context;
-    //camera1
     private Camera mCamera;
     private OnCameraListener onCameraListener;
+    private TextureView mTextureView;
+    private boolean isCameraOpenSuccess = false;
 
-    public OldCameraHelper(Activity activity) {
-        this.context = activity;
+    public OldCameraHelper(Activity context, TextureView textureView) {
+        this.context = context;
+        this.mTextureView = textureView;
     }
 
     public void setOnCameraListener(OnCameraListener onCameraListener) {
         this.onCameraListener = onCameraListener;
     }
 
+    @Override
+    public boolean isCameraOpened() {
+        return isCameraOpenSuccess;
+    }
+
+
     public void openCamera() {
         if (onCameraListener == null) {
             throw new IllegalArgumentException("onCameraListener not set");
         }
-        openCamera1();
-    }
-
-    private void openCamera1() {
         if (mCamera != null) {
             return;
         }
-
         try {
             mCamera = Camera.open(Camera.CameraInfo.CAMERA_FACING_FRONT);
+            mCamera.setPreviewTexture(mTextureView.getSurfaceTexture());//在5.0不设置这句也可以获取到face数据,在4.4的时候不行
             mCamera.startPreview();
 
             Camera.Parameters parameters = mCamera.getParameters();
+            Log.e(TAG,"parameters.getMaxNumDetectedFaces()=" + parameters.getMaxNumDetectedFaces());
             if (parameters.getMaxNumDetectedFaces() >= 1) {
                 mCamera.startFaceDetection();
-                onCameraListener.onCameraOpenSuccess();
+                isCameraOpenSuccess = true;
             } else {
                 onCameraListener.onCameraOpenError("can not detect face");
-                return;
             }
 
             mCamera.setFaceDetectionListener(new Camera.FaceDetectionListener() {
@@ -63,10 +69,6 @@ public class OldCameraHelper implements ICameraHelper {
     }
 
     public void closeCamera() {
-        closeCamera1();
-    }
-
-    private void closeCamera1() {
         if (mCamera != null) {
             mCamera.stopFaceDetection();
             mCamera.stopPreview();

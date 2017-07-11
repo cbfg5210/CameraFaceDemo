@@ -16,41 +16,55 @@
 
 package com.ue.camerafacedemo;
 
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.support.annotation.Nullable;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.view.TextureView;
 import android.view.View;
+
+import com.ue.camerafacedemo.helper.ICameraHelper;
+import com.ue.camerafacedemo.helper.NewCameraHelper;
+import com.ue.camerafacedemo.helper.OldCameraHelper;
+import com.ue.camerafacedemo.helper.OnCameraListener;
 
 public class Camera2Activity extends AppCompatActivity {
     private static final String TAG = "Camera2Activity";
 
     private TextureView mTextureView;
-    private CameraHelper mCameraHelper;
-
-    private OldCameraHelper mOldCameraHelper;
+    private ICameraHelper cameraHelper;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.fragment_camera2_basic);
 
-        mOldCameraHelper = new OldCameraHelper(this);
-
         mTextureView = (TextureView) findViewById(R.id.texture);
-//        mTextureView.setVisibility(View.INVISIBLE);
-//        mTextureView = new TextureView(this);
 
-//        mCameraHelper = new CameraHelper(Camera2Activity.this);
-        /*mCameraHelper.setOnCameraListener(new CameraHelper.OnCameraListener() {
+        findViewById(R.id.btn_open_camera).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (mTextureView.isAvailable()) {
+//                    mCameraHelper.openCamera(mTextureView);
+                }
+            }
+        });
+
+        initCameraHelper();
+    }
+
+    private void initCameraHelper() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+            cameraHelper = new OldCameraHelper(this, mTextureView);
+        } else {
+            cameraHelper = new NewCameraHelper(this, mTextureView);
+        }
+        cameraHelper.setOnCameraListener(new OnCameraListener() {
             @Override
             public void onCameraOpenError(String msg) {
-
-            }
-
-            @Override
-            public void onCameraOpenSuccess() {
-
+                ToastUtil.showShort(Camera2Activity.this, "use_camera_error");
             }
 
             @Override
@@ -62,21 +76,39 @@ public class Camera2Activity extends AppCompatActivity {
             public void onFaceNotFound() {
 
             }
-        });*/
-
-        findViewById(R.id.btn_open_camera).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (mTextureView.isAvailable()) {
-//                    mCameraHelper.openCamera(mTextureView);
-                }
-            }
         });
     }
 
     @Override
+    protected void onPostResume() {
+        super.onPostResume();
+        Log.e(TAG, "cameraHelper=" + cameraHelper);
+
+        new Handler().postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (!CallbackUtils.isActivityValid(Camera2Activity.this)) {
+                    return;
+                }
+                if (cameraHelper == null) {
+                    initCameraHelper();
+                }
+                cameraHelper.openCamera();
+            }
+        }, 200);
+    }
+
+    @Override
+    public void onPause() {
+        if (cameraHelper != null) {
+            cameraHelper.closeCamera();
+        }
+        super.onPause();
+    }
+
+    @Override
     protected void onDestroy() {
-        mCameraHelper.closeCamera();
+        cameraHelper.closeCamera();
         super.onDestroy();
     }
 }

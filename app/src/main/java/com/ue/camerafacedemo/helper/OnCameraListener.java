@@ -1,13 +1,11 @@
-package com.ue.camerafacedemo;
+package com.ue.camerafacedemo.helper;
 
 /**
- * Created by hawk on 2017/7/9.
+ * Created by hujiang on 2017/7/10.
  */
 
 public interface OnCameraListener {
     void onCameraOpenError(String msg);
-
-    void onCameraOpenSuccess();
 
     void onFaceFound();
 

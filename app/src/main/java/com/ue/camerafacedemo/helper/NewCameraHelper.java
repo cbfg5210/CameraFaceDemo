@@ -1,4 +1,4 @@
-package com.ue.camerafacedemo;
+package com.ue.camerafacedemo.helper;
 
 import android.Manifest;
 import android.app.Activity;
@@ -6,7 +6,6 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.ImageFormat;
 import android.graphics.SurfaceTexture;
-import android.hardware.Camera;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
@@ -21,6 +20,7 @@ import android.hardware.camera2.params.StreamConfigurationMap;
 import android.os.Build;
 import android.support.annotation.NonNull;
 import android.support.annotation.RequiresApi;
+import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.text.TextUtils;
 import android.util.Log;
@@ -28,42 +28,55 @@ import android.util.Size;
 import android.view.Surface;
 import android.view.TextureView;
 
+import com.ue.camerafacedemo.CallbackUtils;
+import com.ue.camerafacedemo.ToastUtil;
+import com.yanzhenjie.permission.AndPermission;
+import com.yanzhenjie.permission.PermissionListener;
+import com.yanzhenjie.permission.Rationale;
+import com.yanzhenjie.permission.RationaleListener;
+
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * Created by hujiang on 2017/7/7.
  */
 
-public class CameraHelper {
-    private static final String TAG = CameraHelper.class.getSimpleName();
+public class NewCameraHelper implements ICameraHelper {
+    private static final String TAG = NewCameraHelper.class.getSimpleName();
     private Activity context;
-    //camera1
-    private Camera mCamera;
     //camera2
     private String mCameraId;
     private TextureView mTextureView;
+    private CameraCaptureSession mCaptureSession;
     private CameraDevice mCameraDevice;
     private Size mPreviewSize;
-    private CameraCaptureSession mCaptureSession;
 
     private CameraDevice.StateCallback mStateCallback;
     private CameraCaptureSession.CaptureCallback mCaptureCallback;
-    private OnCameraListener onCameraListener;
     private CameraManager manager;
 
-    public CameraHelper(Activity activity) {
-        this.context = activity;
+    private OnCameraListener onCameraListener;
+    private boolean isCameraOpenSuccess = false;
+
+    public NewCameraHelper(Activity context, TextureView mTextureView) {
+        this.context = context;
+        this.mTextureView = mTextureView;
     }
 
     public void setOnCameraListener(OnCameraListener onCameraListener) {
         this.onCameraListener = onCameraListener;
     }
 
+    @Override
+    public boolean isCameraOpened() {
+        return isCameraOpenSuccess;
+    }
+
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    private void initCamera2() {
+    private void initCameraParams() {
         manager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
         mStateCallback = new CameraDevice.StateCallback() {
-
             @Override
             public void onOpened(@NonNull CameraDevice cameraDevice) {
                 // This method is called when the camera is opened.  We start camera preview here.
@@ -73,28 +86,27 @@ public class CameraHelper {
 
             @Override
             public void onDisconnected(@NonNull CameraDevice cameraDevice) {
-                closeCamera2();
+                closeCamera();
             }
 
             @Override
             public void onError(@NonNull CameraDevice cameraDevice, int error) {
-                closeCamera2();
+                closeCamera();
             }
         };
 
         mCaptureCallback = new CameraCaptureSession.CaptureCallback() {
-
             private void process(CaptureResult result) {
                 if (!CallbackUtils.isActivityValid(context)) {
                     return;
                 }
-//                Integer mode = result.get(CaptureResult.STATISTICS_FACE_DETECT_MODE);
                 Face[] faces = result.get(CaptureResult.STATISTICS_FACES);
-                Log.e("tag", "faces : " + faces.length);
 
                 if (faces == null || faces.length <= 0) {
+                    Log.e(TAG, "face not found,faces=" + faces);
                     onCameraListener.onFaceNotFound();
                 } else {
+                    Log.e(TAG, "face found *****");
                     onCameraListener.onFaceFound();
                 }
             }
@@ -119,8 +131,8 @@ public class CameraHelper {
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     private void createCameraPreviewSession() {
         try {
-            SurfaceTexture texture = mTextureView.getSurfaceTexture();
-
+            SurfaceTexture texture = mTextureView.getSurfaceTexture();//null?
+            Log.e(TAG, "texture=" + texture + ",size=" + mPreviewSize);
             // We configure the size of default buffer to be the size of camera preview we want.
             texture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
             // This is the output Surface we need to start preview.
@@ -130,7 +142,9 @@ public class CameraHelper {
             mPreviewRequestBuilder.addTarget(surface);
 
             // Here, we create a CameraCaptureSession for camera preview.
-            mCameraDevice.createCaptureSession(Arrays.asList(surface), new CameraCaptureSession.StateCallback() {
+            mCameraDevice.createCaptureSession(Arrays.asList(surface),
+                    new CameraCaptureSession.StateCallback() {
+
                         @Override
                         public void onConfigured(@NonNull CameraCaptureSession cameraCaptureSession) {
                             // The camera is already closed
@@ -155,8 +169,7 @@ public class CameraHelper {
                                 @NonNull CameraCaptureSession cameraCaptureSession) {
                             Log.e(TAG, "onConfigureFailed");
                         }
-                    }, null
-            );
+                    }, null);
         } catch (CameraAccessException e) {
             e.printStackTrace();
         }
@@ -181,103 +194,75 @@ public class CameraHelper {
             }
             CameraCharacteristics characteristics = manager.getCameraCharacteristics(mCameraId);
             StreamConfigurationMap map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
-            if (map == null) {
+            if (map == null) {git
                 Log.e(TAG, "map=null");
                 return;
             }
             mPreviewSize = map.getOutputSizes(ImageFormat.JPEG)[0];
-
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    public void openCamera(TextureView textureView) {
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    public void openCamera() {
         if (onCameraListener == null) {
             throw new IllegalArgumentException("onCameraListener not set");
         }
-
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
-            openCamera1();
-        } else {
-            openCamera2(textureView);
-        }
-    }
-
-    private void openCamera1() {
-        if (mCamera != null) {
-            return;
-        }
-
-        try {
-            mCamera = Camera.open(Camera.CameraInfo.CAMERA_FACING_FRONT);
-            mCamera.startPreview();
-
-            Camera.Parameters parameters = mCamera.getParameters();
-            if (parameters.getMaxNumDetectedFaces() >= 1) {
-                mCamera.startFaceDetection();
-                onCameraListener.onCameraOpenSuccess();
-            } else {
-                onCameraListener.onCameraOpenError("can not detect face");
-                return;
-            }
-
-            mCamera.setFaceDetectionListener(new Camera.FaceDetectionListener() {
-                @Override
-                public void onFaceDetection(Camera.Face[] faces, Camera camera) {
-                    if (faces == null || faces.length <= 0) {
-                        onCameraListener.onFaceNotFound();
-                    } else {
-                        onCameraListener.onFaceFound();
-                    }
-                }
-            });
-        } catch (Exception exp) {
-            onCameraListener.onCameraOpenError("failed to open camera1,err=" + exp.getMessage());
-        }
-    }
-
-    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    private void openCamera2(TextureView mTextureView) {
         if (mCameraDevice != null) {
             //表示开启过了，不用再开启
             return;
         }
 
-        this.mTextureView = mTextureView;
-        initCamera2();
+        boolean isM = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M;
+        if (isM) {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                ToastUtil.showShort(context, "open_camera_permission");
+            }
 
+            AndPermission.with(context)
+                    .requestCode(100)
+                    .permission(Manifest.permission.CAMERA)
+                    .rationale(new RationaleListener() {
+                        @Override
+                        public void showRequestPermissionRationale(int requestCode, Rationale rationale) {
+                            // 此对话框可以自定义，调用rationale.resume()就可以继续申请。
+                            AndPermission.rationaleDialog(context, rationale).show();
+                        }
+                    })
+                    .callback(new PermissionListener() {
+                        @Override
+                        public void onSucceed(int requestCode, @NonNull List<String> grantPermissions) {
+                            initAndOpenCamera();
+                        }
+
+                        @Override
+                        public void onFailed(int requestCode, @NonNull List<String> deniedPermissions) {
+                        }
+                    })
+                    .start();
+        } else {
+            initAndOpenCamera();
+        }
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    private void initAndOpenCamera() {
+        initCameraParams();
         try {
-            if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-                //移除opernCamera的提示
+            if (ActivityCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                //移除以下一句的提示
             }
             manager.openCamera(mCameraId, mStateCallback, null);
-            onCameraListener.onCameraOpenSuccess();
+            isCameraOpenSuccess = true;
         } catch (Exception e) {
             e.printStackTrace();
             onCameraListener.onCameraOpenError("failed to open camera2,err=" + e.getMessage());
         }
     }
 
-    public void closeCamera() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
-            closeCamera1();
-        } else {
-            closeCamera2();
-        }
-    }
-
-    private void closeCamera1() {
-        if (mCamera != null) {
-            mCamera.stopFaceDetection();
-            mCamera.stopPreview();
-            mCamera.release();
-            mCamera = null;
-        }
-    }
-
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    private void closeCamera2() {
+    public void closeCamera() {
         if (null != mCaptureSession) {
             mCaptureSession.close();
             mCaptureSession = null;
@@ -287,14 +272,4 @@ public class CameraHelper {
             mCameraDevice = null;
         }
     }
-
-//    public interface OnCameraListener {
-//        void onCameraOpenError(String msg);
-//
-//        void onCameraOpenSuccess();
-//
-//        void onFaceFound();
-//
-//        void onFaceNotFound();
-//    }
 }
